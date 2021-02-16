@@ -91,6 +91,7 @@ class SensorModel:
         converge = False
         old_params = np.array(
             [self._z_hit, self._z_short, self._z_max, self._z_rand, self._sigma_hit, self._lambda_short])
+        num_iterations = 0
         while not converge:
             # compute Z_star for each position, only use num_beams measurement for each location.
             indices = np.arange(0, 180, 180 // num_beams)
@@ -116,13 +117,15 @@ class SensorModel:
             self._z_short = np.sum(e_short) / Z_size
             self._z_max = np.sum(e_max) / Z_size
             self._z_rand = np.sum(e_rand) / Z_size
-            self._sigma_hit = np.sqrt(np.sum(e_hit * (Z_prime - Z_star)**2) / (z_hit * Z_size))
+            self._sigma_hit = np.sqrt(np.sum(e_hit * (Z_prime - Z_star)**2) / (e_hit * Z_size))
             self._lambda_short = np.sum(e_short) / np.sum(e_short * Z_prime)
 
             # check converge
             new_params = np.array(
                 [self._z_hit, self._z_short, self._z_max, self._z_rand, self._sigma_hit, self._lambda_short])
-            converge = np.allclose(old_params, new_params)
+            converge = np.allclose(old_params, new_params, rtol=1e-2)
+            num_iterations += 1
+            print(f'iteration {num_iterations}: old params {old_params}, new params {new_params}')
             old_params = new_params
 
 def log_sum(p):
