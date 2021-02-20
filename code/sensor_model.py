@@ -85,6 +85,14 @@ class SensorModel:
         param[out] z_star: ground truth array for each beam
         """
         z_star = np.ones(num_beams)
+        for i in range(0, num_beams):
+            theta = i*2*np.pi # Convention - z* go from 0 degrees to 360 degrees
+            # Could make it go from front CCW - theta = i*2*np.pi + x[2]
+            x0, y0 = x[0:2]
+            x1, y1 = x[0:2] + np.round(self._max_range * np.array([np.cos(theta), np.sin(theta)]))
+            #print(x0, y0, x1, y1)
+            z_star[i] = bresenham_line_search(x0, y0, x1, y1, occupancy_map, self._max_range)
+            print(z_star[i])
         return z_star
 
     def learn_intrinsic_parameters(self, Z, X, num_beams=8):
@@ -128,8 +136,49 @@ class SensorModel:
             print(f'iteration {num_iterations}: old params {old_params}, new params {new_params}')
             old_params = new_params
 
+
 def log_sum(p):
     """
-    perform log sum trick to accumualte probability
+    perform log sum trick to accumulate probability
     """
     return np.exp(np.sum(np.log(p)))
+
+
+def bresenham_line_search(x0, y0, x1, y1, occupancy_map, max_range):
+    x0, y0, x1, y1 = np.round([x0, y0, x1, y1]).astype(int) # Casted to ints, may change later
+    steep = np.abs(y1-y0) > abs(x1-x0)
+    if steep:
+        swap(x0, y0)
+        swap(x1, y1)
+    if x0 > x1:
+        swap(x0, x1)
+        swap(y0, y1)
+
+    slope = (y1 - y0) / ( x1 - x0)
+    derr = np.abs(slope)
+    ystep = 1 - 2*(y0 > y1)
+    err = 0.0
+    y = y0
+
+    for x in range(x0, x1):
+        if steep:
+            if occupancy_map[y, x] == 1: # IMPORTANT: is this how we determine there is an object there?
+                # It's definitely not, since x/y are out of bounds
+                return dist(x0, y0, x, y)
+        else:
+            if occupancy_map[x, y] == 1:
+                return dist(x0, y0, x, y)
+        err = err + derr
+        if err >= 0.5:
+            y = y + ystep
+            err = err - 1.0
+
+    return max_range
+
+
+def swap(a, b):
+    return b, a
+
+
+def dist(x0, y0, x1, y1):
+    return np.sqrt((x1-x0)**2 + (y1-y0)**2)
