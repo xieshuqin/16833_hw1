@@ -27,12 +27,19 @@ def visualize_map(occupancy_map):
 
 
 def visualize_timestep(X_bar, tstep, output_path):
-    x_locs = X_bar[:, 0] / 10.0
-    y_locs = X_bar[:, 1] / 10.0
+    x_locs = X_bar[:, 0] # / 10.0
+    y_locs = X_bar[:, 1] # / 10.0
     scat = plt.scatter(x_locs, y_locs, c='r', marker='o')
     plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
-    plt.pause(0.00001)
+    plt.pause(0.1)
     scat.remove()
+
+
+def my_visualize(X_bar, occupancy_map):
+    plt.clf()
+    plt.imshow(occupancy_map)
+    plt.scatter(X_bar[:, 0], X_bar[:, 1], c='r', marker='o')
+    plt.pause(0.01)
 
 
 def init_particles_random(num_particles, occupancy_map):
@@ -58,8 +65,18 @@ def init_particles_freespace(num_particles, occupancy_map):
     TODO : Add your code here
     This version converges faster than init_particles_random
     """
-    X_bar_init = np.zeros((num_particles, 4))
+    MIN_PROBABILITY = 0.35
+    # y, x = np.where((occupancy_map < MIN_PROBABILITY) & (occupancy_map != -1))
+    y, x = np.where(occupancy_map == 0)
+    indices = np.random.choice(np.arange(len(y)), num_particles)
+    y0_vals = y[indices].astype(np.float)
+    x0_vals = x[indices].astype(np.float)
+    theta0_vals = np.random.uniform(-np.pi, np.pi, num_particles)
 
+    w0_vals = np.ones((num_particles,), dtype=np.float64)
+    w0_vals = w0_vals / num_particles
+
+    X_bar_init = np.stack([x0_vals, y0_vals, theta0_vals, w0_vals], axis=1)
     return X_bar_init
 
 
@@ -82,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', default='results')
     parser.add_argument('--num_particles', default=500, type=int)
     parser.add_argument('--visualize', action='store_true')
+    parser.add_argument('--debug', action='store_true', help='Debug mode, only send out 10 beams')
     args = parser.parse_args()
 
     src_path_map = args.path_to_map
@@ -97,8 +115,10 @@ if __name__ == '__main__':
     resampler = Resampling()
 
     num_particles = args.num_particles
-    X_bar = init_particles_random(num_particles, occupancy_map)
-    # X_bar = init_particles_freespace(num_particles, occupancy_map)
+    # X_bar = init_particles_random(num_particles, occupancy_map)
+    X_bar = init_particles_freespace(num_particles, occupancy_map)
+
+    num_beams = 4 if args.debug else 180
     """
     Monte Carlo Localization Algorithm : Main Loop
     """
@@ -154,11 +174,13 @@ if __name__ == '__main__':
             """
             if (meas_type == "L"):
                 z_t = ranges
-                w_t = sensor_model.beam_range_finder_model(z_t, x_t1)
+                # w_t = 1.
+                w_t = sensor_model.beam_range_finder_model(z_t, x_t1, num_beams)
                 X_bar_new[m, :] = np.hstack((x_t1, w_t))
             else:
                 X_bar_new[m, :] = np.hstack((x_t1, X_bar[m, 3]))
 
+        # print(f'old_weight: {X_bar[:, -1]}, new_weight: {X_bar_new[:, -1]}')
         X_bar = X_bar_new
         u_t0 = u_t1
 
@@ -169,3 +191,4 @@ if __name__ == '__main__':
 
         if args.visualize:
             visualize_timestep(X_bar, time_idx, args.output)
+            # my_visualize(X_bar, occupancy_map)

@@ -25,7 +25,7 @@ class Resampling:
         """
         TODO : Add your code here
         """
-        X_bar_resampled =  np.zeros_like(X_bar)
+        X_bar_resampled = np.zeros_like(X_bar)
         return X_bar_resampled
 
     def low_variance_sampler(self, X_bar):
@@ -37,13 +37,13 @@ class Resampling:
         TODO : Add your code here
         """
         num_particles = len(X_bar)
-        X_bar_resampled =  np.zeros_like(X_bar)
-        r = np.random.rand()*(1/num_particles)
+        X_bar_resampled = np.zeros_like(X_bar)
+        r = np.random.rand()*(1/num_particles) * (X_bar[:, -1].sum())
         c = X_bar[0][3]
         i = 0
         for m in range(num_particles):
             U = r+m*(1/num_particles)
-            while (U>c):
+            while i < X_bar.shape[0]-1 and (U>c):
                 i += 1
                 c += X_bar[i][3]
             X_bar_resampled[m] = X_bar[i]

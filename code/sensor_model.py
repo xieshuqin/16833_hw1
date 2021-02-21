@@ -23,24 +23,29 @@ class SensorModel:
         TODO : Tune Sensor Model parameters here
         The original numbers are for reference but HAVE TO be tuned.
         """
-        self._z_hit = 1
-        self._z_short = 0.1
-        self._z_max = 0.1
-        self._z_rand = 100
+        # self._z_hit = 1.
+        # self._z_short = 1. # 0.1
+        # self._z_max = 0.5 # 0.1
+        # self._z_rand = 5. # 100
 
-        self._sigma_hit = 50
-        self._lambda_short = 0.1
+        self._z_hit = 99/2/2.5/4  # 1.
+        self._z_short = 198/4//2.5/4  # 1
+        self._z_max = 49/2.5/4  # 0.5
+        self._z_rand = 990/4  # 5
 
-        self._max_range = 1000
+        self._sigma_hit = 100 # 15 # 50
+        self._lambda_short = 0.01 # 0.05
+
+        self._max_range = 1000 # 100 # 1000
         self._min_probability = 0.35
         self._subsampling = 2
-        self._delta = 2
+        self._delta = 10
 
         self._norm_wts = 1.0
 
         self.occupancy_map = occupancy_map
 
-    def beam_range_finder_model(self, z_t1_arr, x_t1):
+    def beam_range_finder_model(self, z_t1_arr, x_t1, num_beams=180):
         """
         param[in] z_t1_arr : laser range readings [array of 180 values] at time t
         param[in] x_t1 : particle state belief [x, y, theta] at time t [world_frame]
@@ -49,7 +54,16 @@ class SensorModel:
         """
         TODO : Add your code here
         """
-        z_t1_star = self.ray_casting(x_t1, self.occupancy_map)
+        stride = 180 // num_beams
+        z_t1_arr = z_t1_arr[0:181:stride]
+        z_t1_arr = z_t1_arr / 10.
+
+        sensor_offset = 2.5 # sensor has 25 cm offset from car center
+        theta = x_t1[2]
+        x_sensor = x_t1.copy()
+        x_sensor[:2] += (sensor_offset * np.array([np.cos(theta), np.sin(theta)]))
+
+        z_t1_star = self.ray_casting(x_sensor, self.occupancy_map, num_beams)
         p_hit, p_short, p_max, p_rand = self.estimate_density(z_t1_arr, z_t1_star)
         prob_zt1_arr = self._z_hit * p_hit + self._z_short * p_short + self._z_rand * p_rand + self._z_max * p_max
         prob_zt1 = log_sum(prob_zt1_arr)
@@ -63,10 +77,11 @@ class SensorModel:
         """
         p_hit = np.exp(-(z - z_star)**2 / (2*self._sigma_hit))
         p_hit /= np.sqrt(2 * np.pi * self._sigma_hit)
-        p_hit /= 1 # TODO: Add a normalize term here
+        norm_term = norm.cdf(self._max_range, z_star, self._sigma_hit) - norm.cdf(0, z_star, self._sigma_hit)
+        p_hit /= (norm_term + 1e-9)
 
         p_short = self._lambda_short * np.exp(-self._lambda_short * z)
-        p_short /= (1 - np.exp(-self._lambda_short * z_star))
+        p_short /= (1 - np.exp(-self._lambda_short * z_star) + 1e-9)
         p_short[z > z_star] = 0
 
         p_max = np.ones_like(z) * (1. / self._delta)
@@ -76,7 +91,7 @@ class SensorModel:
 
         return p_hit, p_short, p_max, p_rand
 
-    def ray_casting(self, x, occupancy_map, num_beams=180):
+    def ray_casting_old(self, x, occupancy_map, num_beams=180):
         """
         Implement ray casting algorithm.
         param[in] x: particle state belief [x, y, theta] at time t [world_frame]
@@ -110,10 +125,16 @@ class SensorModel:
         plt.show()
         return z_star
 
+    def ray_casting(self, x, occupancy_map, num_beams=180):
+        z_star = np.ones(num_beams)
+        thetas = np.arange(num_beams).astype(np.float) * (np.pi / num_beams)
+        for i in range(num_beams):
+            z_star[i] = self.ray_casting_one_direction(x, occupancy_map, thetas[i])
+        return z_star
+
     def ray_casting_one_direction(self, x, occupancy_map, alpha):
         x0, y0, theta = x
         angle = (theta - np.pi/2 + alpha) % (2 * np.pi)
-        print(angle)
         if np.pi/2 < angle < np.pi*3/2:
             # beam point at negative x axis
             k = -np.tan(angle)
@@ -231,19 +252,17 @@ def dist(x0, y0, x1, y1):
 
 
 if __name__ == '__main__':
-    np.random.seed(10000)
+    np.random.seed(10008)
     map_obj = MapReader('../data/map/wean.dat')
     occupancy_map = map_obj.get_map()
 
     # generate a random particle, then sent out beams from that location
     h, w = occupancy_map.shape
-    mask = occupancy_map.flatten()
-    mask = np.logical_and(mask != -1, mask < 1 - MIN_PROBABILITY)
-    indices = np.where(mask)[0]
+    indices = np.where(occupancy_map.flatten() == 0)[0]
     ind = np.random.choice(indices, 1)[0]
     y, x = ind // w, ind % w
-    theta = np.pi/2
-    angle = np.pi
+    theta = -np.pi/2
+    angle = np.pi*(95. / 180)
 
     sensor = SensorModel(occupancy_map)
     z_t_star = sensor.ray_casting_one_direction((x, y, theta), occupancy_map, angle)

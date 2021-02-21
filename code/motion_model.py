@@ -19,10 +19,10 @@ class MotionModel:
         TODO : Tune Motion Model parameters here
         The original numbers are for reference but HAVE TO be tuned.
         """
-        self._alpha1 = 0.0002
-        self._alpha2 = 0.0004
-        self._alpha3 = 0.01
-        self._alpha4 = 0.01
+        self._alpha1 = 100 # 0.0002
+        self._alpha2 = 100 # 0.0004
+        self._alpha3 = 100 # 0.01
+        self._alpha4 = 100 # 0.01
 
 
     def update(self, u_t0, u_t1, x_t0):
