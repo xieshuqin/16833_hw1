@@ -85,15 +85,60 @@ class SensorModel:
         param[out] z_star: ground truth array for each beam
         """
         z_star = np.ones(num_beams)
+        interval = 180 / num_beams
         for i in range(0, num_beams):
-            theta = i*2*np.pi # Convention - z* go from 0 degrees to 360 degrees
+            theta = i * interval * 2 * np.pi # Convention - z* go from 0 degrees to 360 degrees
             # Could make it go from front CCW - theta = i*2*np.pi + x[2]
             x0, y0 = x[0:2]
             x1, y1 = x[0:2] + np.round(self._max_range * np.array([np.cos(theta), np.sin(theta)]))
             #print(x0, y0, x1, y1)
             z_star[i] = bresenham_line_search(x0, y0, x1, y1, occupancy_map, self._max_range)
             print(z_star[i])
+
+        x0, y0 = x[0:2]
+        thetas = np.arange(num_beams) * interval * 2 * np.pi
+        x1 = x0 + z_star * np.cos(thetas)
+        y1 = y0 + z_star * np.sin(thetas)
+
+        # plot figure
+        fig = plt.figure()
+        plt.imshow(occupancy_map)
+        plt.scatter(x0, y0)
+        for i in range(num_beams):
+            plt.plot((x0, y0), (x1[i], y1[i]))
+
+        plt.show()
         return z_star
+
+    def ray_casting_one_direction(self, x, occupancy_map, alpha):
+        x0, y0, theta = x
+        angle = (theta - np.pi/2 + alpha) % (2 * np.pi)
+        print(angle)
+        if np.pi/2 < angle < np.pi*3/2:
+            # beam point at negative x axis
+            k = -np.tan(angle)
+            for xi in range(int(np.round(x0)), 0, -1):
+                yi = int(np.round((xi - x0) * k + y0))
+                if 0 <= yi < occupancy_map.shape[0] and (occupancy_map[yi, xi] >= self._min_probability or occupancy_map[yi, xi] == -1):
+                    return math.sqrt((xi - x0) ** 2 + (yi - y0) ** 2)
+            return math.sqrt((xi - x0) ** 2 + (yi - y0) ** 2)
+        elif angle < np.pi/2 or angle > np.pi*3/2:
+            # beam point at positive x axis
+            k = -np.tan(angle)
+            for xi in range(int(np.round(x0)), occupancy_map.shape[1]):
+                yi = int(np.round((xi - x0) * k + y0))
+                if 0 <= yi < occupancy_map.shape[0] and (occupancy_map[yi, xi] >= self._min_probability or occupancy_map[yi, xi] == -1):
+                    return math.sqrt((xi - x0) ** 2 + (yi - y0) ** 2)
+            return math.sqrt((xi - x0) ** 2 + (yi - y0) ** 2)
+        else:
+            # angle == np.pi/2 or np.pi*3/2
+            xi, yi = int(np.round(x0)), int(np.round(y0))
+            y_offset = -1 if angle == np.pi/2 else 1
+            while yi > 0 and yi < occupancy_map.shape[0]:
+                if occupancy_map[yi, xi] >= self._min_probability or occupancy_map[yi, xi] == -1:
+                    return math.sqrt((xi - x0) ** 2 + (yi - y0) ** 2)
+                yi += y_offset
+            return math.sqrt((xi - x0) ** 2 + (yi - y0) ** 2)
 
     def learn_intrinsic_parameters(self, Z, X, num_beams=8):
         converge = False
@@ -144,6 +189,7 @@ def log_sum(p):
     return np.exp(np.sum(np.log(p)))
 
 
+MIN_PROBABILITY = 0.35
 def bresenham_line_search(x0, y0, x1, y1, occupancy_map, max_range):
     x0, y0, x1, y1 = np.round([x0, y0, x1, y1]).astype(int) # Casted to ints, may change later
     steep = np.abs(y1-y0) > abs(x1-x0)
@@ -162,11 +208,11 @@ def bresenham_line_search(x0, y0, x1, y1, occupancy_map, max_range):
 
     for x in range(x0, x1):
         if steep:
-            if occupancy_map[y, x] == 1: # IMPORTANT: is this how we determine there is an object there?
+            if occupancy_map[y, x] >= MIN_PROBABILITY: # IMPORTANT: is this how we determine there is an object there?
                 # It's definitely not, since x/y are out of bounds
                 return dist(x0, y0, x, y)
         else:
-            if occupancy_map[x, y] == 1:
+            if occupancy_map[x, y] >= MIN_PROBABILITY:
                 return dist(x0, y0, x, y)
         err = err + derr
         if err >= 0.5:
@@ -182,3 +228,55 @@ def swap(a, b):
 
 def dist(x0, y0, x1, y1):
     return np.sqrt((x1-x0)**2 + (y1-y0)**2)
+
+
+if __name__ == '__main__':
+    np.random.seed(10000)
+    map_obj = MapReader('../data/map/wean.dat')
+    occupancy_map = map_obj.get_map()
+
+    # generate a random particle, then sent out beams from that location
+    h, w = occupancy_map.shape
+    mask = occupancy_map.flatten()
+    mask = np.logical_and(mask != -1, mask < 1 - MIN_PROBABILITY)
+    indices = np.where(mask)[0]
+    ind = np.random.choice(indices, 1)[0]
+    y, x = ind // w, ind % w
+    theta = np.pi/2
+    angle = np.pi
+
+    sensor = SensorModel(occupancy_map)
+    z_t_star = sensor.ray_casting_one_direction((x, y, theta), occupancy_map, angle)
+
+    x0, y0 = x, y
+    angle = theta + angle - np.pi/2
+    x1 = x0 + z_t_star * np.cos(angle)
+    y1 = y0 - z_t_star * np.sin(angle)
+
+    # plot figure
+    fig = plt.figure()
+    plt.imshow(occupancy_map)
+    plt.scatter(x0, y0, c='red')
+    plt.scatter(x1, y1, c='yellow')
+    print(f'(x0, y0): ({x0}, {y0}), (x1, y1): ({x1}, {y1})')
+    plt.plot((x0, x1), (y0, y1), color='yellow')
+
+    plt.show()
+    print(z_t_star)
+
+
+    # logfile = open('../data/log/robotdata1.log', 'r')
+    # line = logfile.readlines()[0]
+    #
+    # meas_type = line[0]
+    # meas_vals = np.fromstring(line[2:], dtype=np.float64, sep=' ')
+    #
+    # odometry_robot = meas_vals[0:3]
+    # time_stamp = meas_vals[-1]
+    # if (meas_type == "L"):
+    #     # [x, y, theta] coordinates of laser in odometry frame
+    #     odometry_laser = meas_vals[3:6]
+    #     # 180 range measurement values from single laser scan
+    #     ranges = meas_vals[6:-1]
+    #
+    # print(f'Odometry_laser: {odometry_laser}, range 0: {ranges[0]}')
