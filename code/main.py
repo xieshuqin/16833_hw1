@@ -17,9 +17,12 @@ from matplotlib import pyplot as plt
 from matplotlib import figure as fig
 import time
 
+# For debug purpose, set a fix random seed
+np.random.seed(10000)
+
 
 def visualize_map(occupancy_map):
-    fig = plt.figure()
+    fig = plt.figure(1)
     mng = plt.get_current_fig_manager()
     plt.ion()
     plt.imshow(occupancy_map, cmap='Greys')
@@ -27,12 +30,37 @@ def visualize_map(occupancy_map):
 
 
 def visualize_timestep(X_bar, tstep, output_path):
-    x_locs = X_bar[:, 0] # / 10.0
-    y_locs = X_bar[:, 1] # / 10.0
+    fig = plt.figure(1)
+    x_locs = X_bar[:, 0] / 10.0
+    y_locs = X_bar[:, 1] / 10.0
     scat = plt.scatter(x_locs, y_locs, c='r', marker='o')
     plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
     plt.pause(0.1)
     scat.remove()
+
+
+def visualize_rays(X_bar, sensor_model):
+    x_peak = X_bar[np.argmax(X_bar[:, 3])]
+    x, y, theta, weight = x_peak
+    x0, y0 = x, y
+    angle = np.arange(180) * np.pi / 180
+    angle = theta + angle - np.pi/2
+
+    z_t_star = sensor_model.ray_casting(np.array([x, y, theta]), sensor_model.occupancy_map, 180)
+    x1 = x0 + z_t_star * np.cos(angle)
+    y1 = y0 - z_t_star * np.sin(angle)
+
+    x0 /= 10
+    y0 /= 10
+    x1 /= 10
+    y1 /= 10
+
+    fig = plt.figure(2)
+    plt.clf()
+    plt.imshow(sensor_model.occupancy_map)
+    plt.scatter(x1, y1, c='y', marker='o')
+    plt.scatter(x0, y0, c='r', marker='x')
+    plt.pause(0.1)
 
 
 def my_visualize(X_bar, occupancy_map):
@@ -69,8 +97,8 @@ def init_particles_freespace(num_particles, occupancy_map):
     # y, x = np.where((occupancy_map < MIN_PROBABILITY) & (occupancy_map != -1))
     y, x = np.where(occupancy_map == 0)
     indices = np.random.choice(np.arange(len(y)), num_particles)
-    y0_vals = y[indices].astype(np.float)
-    x0_vals = x[indices].astype(np.float)
+    y0_vals = y[indices].astype(np.float) * 10.
+    x0_vals = x[indices].astype(np.float) * 10.
     theta0_vals = np.random.uniform(-np.pi, np.pi, num_particles)
 
     w0_vals = np.ones((num_particles,), dtype=np.float64)
@@ -118,7 +146,7 @@ if __name__ == '__main__':
     # X_bar = init_particles_random(num_particles, occupancy_map)
     X_bar = init_particles_freespace(num_particles, occupancy_map)
 
-    num_beams = 4 if args.debug else 180
+    num_beams = 10 if args.debug else 180
     """
     Monte Carlo Localization Algorithm : Main Loop
     """
@@ -157,8 +185,13 @@ if __name__ == '__main__':
             first_time_idx = False
             continue
 
+        if meas_type == "O":
+            continue
+
         X_bar_new = np.zeros((num_particles, 4), dtype=np.float64)
         u_t1 = odometry_robot
+
+        print(f'u_t0: {u_t0[:2]}, u_t1: {u_t1[:2]}')
 
         # Note: this formulation is intuitive but not vectorized; looping in python is SLOW.
         # Vectorized version will receive a bonus. i.e., the functions take all particles as the input and process them in a vector.
@@ -187,8 +220,14 @@ if __name__ == '__main__':
         """
         RESAMPLING
         """
-        X_bar = resampler.low_variance_sampler(X_bar)
+        if meas_type == "L":
+            # Only resample when laser measurement
+            # X_bar_new = resampler.low_variance_sampler(X_bar)
+            X_bar_new = resampler.multinomial_sampler(X_bar)
+            # print(f'#paricles: before {X_bar.shape[0]}, after {X_bar_new.shape[0]}')
+            X_bar = X_bar_new
 
         if args.visualize:
             visualize_timestep(X_bar, time_idx, args.output)
+            visualize_rays(X_bar, sensor_model)
             # my_visualize(X_bar, occupancy_map)

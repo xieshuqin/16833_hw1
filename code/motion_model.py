@@ -19,13 +19,13 @@ class MotionModel:
         TODO : Tune Motion Model parameters here
         The original numbers are for reference but HAVE TO be tuned.
         """
-        self._alpha1 = 100 # 0.0002
-        self._alpha2 = 100 # 0.0004
-        self._alpha3 = 100 # 0.01
-        self._alpha4 = 100 # 0.01
+        self._alpha1 = 0.0001 # 0.0002
+        self._alpha2 = 0.0001 # 0.0004
+        self._alpha3 = 0.01 # 0.01
+        self._alpha4 = 0.01 # 0.01
 
 
-    def update(self, u_t0, u_t1, x_t0):
+    def update(self, u_t0_raw, u_t1_raw, x_t0):
         """
         param[in] u_t0 : particle state odometry reading [x, y, theta] at time (t-1) [odometry_frame]
         param[in] u_t1 : particle state odometry reading [x, y, theta] at time t [odometry_frame]
@@ -35,6 +35,9 @@ class MotionModel:
         """
         TODO : Add your code here
         """
+        u_t0 = u_t0_raw.copy()
+        u_t1 = u_t1_raw.copy()
+
         delta_rot_1 = np.arctan2(u_t1[1]-u_t0[1],u_t1[0]-u_t0[0])-u_t0[2]
         delta_trans = np.sqrt((u_t0[0]-u_t1[0])**2+(u_t0[1]-u_t1[1])**2)
         delta_rot_2 = u_t1[2]-u_t0[2]-delta_rot_1
@@ -43,9 +46,9 @@ class MotionModel:
             mult = int(delta_rot_2/np.pi)
             delta_rot_2 = (delta_rot_2-mult*np.pi)
 
-        delta_rot_1_hat = delta_rot_1-np.random.normal(0.0, np.sqrt(np.abs(self._alpha1*delta_rot_1+self._alpha2*delta_trans)))
-        delta_trans_hat = delta_trans-np.random.normal(0.0, np.sqrt(np.abs(self._alpha3*delta_trans+self._alpha4*(delta_rot_1+delta_rot_2))))
-        delta_rot_2_hat = delta_rot_2-np.random.normal(0.0, np.sqrt(np.abs(self._alpha1*delta_rot_2+self._alpha2*delta_trans))) 
+        delta_rot_1_hat = delta_rot_1-np.random.normal(0.0, np.sqrt(np.abs(self._alpha1*delta_rot_1**2+self._alpha2*delta_trans**2)))
+        delta_trans_hat = delta_trans-np.random.normal(0.0, np.sqrt(np.abs(self._alpha3*delta_trans**2+self._alpha4*(delta_rot_1**2+delta_rot_2**2))))
+        delta_rot_2_hat = delta_rot_2-np.random.normal(0.0, np.sqrt(np.abs(self._alpha1*delta_rot_2**2+self._alpha2*delta_trans**2)))
 
         x_prime = x_t0[0] + delta_trans_hat*np.cos(x_t0[2]+delta_rot_1_hat)
         y_prime = x_t0[1] + delta_trans_hat*np.sin(x_t0[2]+delta_rot_1_hat)

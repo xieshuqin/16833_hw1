@@ -6,7 +6,7 @@ from sensor_model import SensorModel, MIN_PROBABILITY
 
 
 def test_hyperparameter():
-    np.random.seed(10007)
+    np.random.seed(10008)
     map_obj = MapReader('../data/map/wean.dat')
     occupancy_map = map_obj.get_map()
 

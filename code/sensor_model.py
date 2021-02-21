@@ -55,8 +55,8 @@ class SensorModel:
         TODO : Add your code here
         """
         stride = 180 // num_beams
-        z_t1_arr = z_t1_arr[0:181:stride]
-        z_t1_arr = z_t1_arr / 10.
+        z_t1_arr = z_t1_arr[0:181:stride].copy()
+        # z_t1_arr = z_t1_arr / 10.
 
         sensor_offset = 2.5 # sensor has 25 cm offset from car center
         theta = x_t1[2]
@@ -125,14 +125,18 @@ class SensorModel:
         plt.show()
         return z_star
 
-    def ray_casting(self, x, occupancy_map, num_beams=180):
+    def ray_casting(self, x_cm, occupancy_map, num_beams=180):
+        x = x_cm.copy()
+        x[:2] /= 10.
         z_star = np.ones(num_beams)
         thetas = np.arange(num_beams).astype(np.float) * (np.pi / num_beams)
         for i in range(num_beams):
             z_star[i] = self.ray_casting_one_direction(x, occupancy_map, thetas[i])
+        z_star *= 10.
         return z_star
 
     def ray_casting_one_direction(self, x, occupancy_map, alpha):
+        x = x.copy()
         x0, y0, theta = x
         angle = (theta - np.pi/2 + alpha) % (2 * np.pi)
         if np.pi/2 < angle < np.pi*3/2:

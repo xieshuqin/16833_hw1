@@ -25,7 +25,11 @@ class Resampling:
         """
         TODO : Add your code here
         """
-        X_bar_resampled = np.zeros_like(X_bar)
+
+        num_particles = X_bar.shape[0]
+        prob = X_bar[:, -1] / np.sum(X_bar[:, -1])
+        indices = np.random.choice(num_particles, num_particles, replace=True, p=prob)
+        X_bar_resampled = X_bar[indices]
         return X_bar_resampled
 
     def low_variance_sampler(self, X_bar):
@@ -38,7 +42,7 @@ class Resampling:
         """
         num_particles = len(X_bar)
         X_bar_resampled = np.zeros_like(X_bar)
-        r = np.random.rand()*(1/num_particles) * (X_bar[:, -1].sum())
+        r = np.random.rand()*(1./num_particles) * (X_bar[:, -1].sum())
         c = X_bar[0][3]
         i = 0
         for m in range(num_particles):
@@ -47,4 +51,7 @@ class Resampling:
                 i += 1
                 c += X_bar[i][3]
             X_bar_resampled[m] = X_bar[i]
+        print(f'X_bar: \n{X_bar}')
+        print(f'X_bar_resample: \n{X_bar_resampled}')
+        # import ipdb; ipdb.set_trace()
         return X_bar_resampled
