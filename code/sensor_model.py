@@ -98,14 +98,14 @@ class SensorModel:
         x0, y0 = x[0:2]
         thetas = np.arange(num_beams) * interval * 2 * np.pi
         x1 = x0 + z_star * np.cos(thetas)
-        y1 = y0 + z_star * np.sin(thetas)
+        y1 = y0 - z_star * np.sin(thetas)
 
         # plot figure
         fig = plt.figure()
         plt.imshow(occupancy_map)
-        plt.scatter(x0, y0)
+        plt.scatter(x0, y0, c='red')
         for i in range(num_beams):
-            plt.plot((x0, y0), (x1[i], y1[i]))
+            plt.plot((x0, x1[i]), (y0, y1[i]), c='yellow')
 
         plt.show()
         return z_star
