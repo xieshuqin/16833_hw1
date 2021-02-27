@@ -23,7 +23,8 @@ np.random.seed(10000)
 
 def visualize_map(occupancy_map):
     fig = plt.figure(1)
-    mng = plt.get_current_fig_manager()
+    # ax = plt.subplot(121)
+    # mng = plt.get_current_fig_manager()
     plt.ion()
     plt.imshow(occupancy_map, cmap='Greys')
     plt.axis([0, 800, 0, 800])
@@ -31,11 +32,12 @@ def visualize_map(occupancy_map):
 
 def visualize_timestep(X_bar, tstep, output_path):
     fig = plt.figure(1)
+    # ax = plt.subplot(121)
     x_locs = X_bar[:, 0] / 10.0
     y_locs = X_bar[:, 1] / 10.0
     scat = plt.scatter(x_locs, y_locs, c='r', marker='o')
     plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
-    plt.pause(0.1)
+    plt.pause(0.01)
     scat.remove()
 
 
@@ -55,12 +57,15 @@ def visualize_rays(X_bar, sensor_model):
     x1 /= 10
     y1 /= 10
 
-    fig = plt.figure(2)
-    plt.clf()
+    # fig = plt.figure(2)
+    fig = plt.figure(1)
+    ax = plt.subplot(122)
+    plt.cla()
     plt.imshow(sensor_model.occupancy_map)
     plt.scatter(x1, y1, c='y', marker='o')
     plt.scatter(x0, y0, c='r', marker='x')
-    plt.pause(0.1)
+    plt.pause(0.01)
+    # plt.show()
 
 
 def my_visualize(X_bar, occupancy_map):
@@ -152,6 +157,10 @@ if __name__ == '__main__':
     """
     if args.visualize:
         visualize_map(occupancy_map)
+        visualize_timestep(X_bar, 1, args.output)
+        # plt.figure(2); plt.imshow(occupancy_map); plt.pause(0.01)
+        # X_temp = np.array([[20, 20, 0.5]])
+        # visualize_timestep(X_temp, 1, args.output)
 
     first_time_idx = True
     for time_idx, line in enumerate(logfile):
@@ -177,8 +186,8 @@ if __name__ == '__main__':
             # 180 range measurement values from single laser scan
             ranges = meas_vals[6:-1]
 
-        print("Processing time step {} at time {}s".format(
-            time_idx, time_stamp))
+        # print("Processing time step {} at time {}s".format(
+        #     time_idx, time_stamp))
 
         if first_time_idx:
             u_t0 = odometry_robot
@@ -191,29 +200,17 @@ if __name__ == '__main__':
         X_bar_new = np.zeros((num_particles, 4), dtype=np.float64)
         u_t1 = odometry_robot
 
-        print(f'u_t0: {u_t0[:2]}, u_t1: {u_t1[:2]}')
+        # Update motion
+        X_t1 = motion_model.update_vectorized(u_t0, u_t1, X_bar[:, 0:3])
 
-        # Note: this formulation is intuitive but not vectorized; looping in python is SLOW.
-        # Vectorized version will receive a bonus. i.e., the functions take all particles as the input and process them in a vector.
-        for m in range(0, num_particles):
-            """
-            MOTION MODEL
-            """
-            x_t0 = X_bar[m, 0:3]
-            x_t1 = motion_model.update(u_t0, u_t1, x_t0)
+        # Correction step
+        z_t = ranges
+        if meas_type == "L":
+            W_t = sensor_model.beam_range_finder_model_vectorized(z_t, X_t1, num_beams)
+            X_bar_new = np.hstack((X_t1, W_t[..., None]))
+        else:
+            X_bar_new = np.hstack((X_t1, X_bar[:, [-1]]))
 
-            """
-            SENSOR MODEL
-            """
-            if (meas_type == "L"):
-                z_t = ranges
-                # w_t = 1.
-                w_t = sensor_model.beam_range_finder_model(z_t, x_t1, num_beams)
-                X_bar_new[m, :] = np.hstack((x_t1, w_t))
-            else:
-                X_bar_new[m, :] = np.hstack((x_t1, X_bar[m, 3]))
-
-        # print(f'old_weight: {X_bar[:, -1]}, new_weight: {X_bar_new[:, -1]}')
         X_bar = X_bar_new
         u_t0 = u_t1
 
@@ -222,12 +219,10 @@ if __name__ == '__main__':
         """
         if meas_type == "L":
             # Only resample when laser measurement
-            # X_bar_new = resampler.low_variance_sampler(X_bar)
-            X_bar_new = resampler.multinomial_sampler(X_bar)
-            # print(f'#paricles: before {X_bar.shape[0]}, after {X_bar_new.shape[0]}')
+            X_bar_new = resampler.low_variance_sampler(X_bar)
             X_bar = X_bar_new
 
         if args.visualize:
             visualize_timestep(X_bar, time_idx, args.output)
-            visualize_rays(X_bar, sensor_model)
+            # visualize_rays(X_bar, sensor_model)
             # my_visualize(X_bar, occupancy_map)

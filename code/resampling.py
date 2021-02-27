@@ -25,7 +25,6 @@ class Resampling:
         """
         TODO : Add your code here
         """
-
         num_particles = X_bar.shape[0]
         prob = X_bar[:, -1] / np.sum(X_bar[:, -1])
         indices = np.random.choice(num_particles, num_particles, replace=True, p=prob)
@@ -40,18 +39,24 @@ class Resampling:
         """
         TODO : Add your code here
         """
-        num_particles = len(X_bar)
-        X_bar_resampled = np.zeros_like(X_bar)
-        r = np.random.rand()*(1./num_particles) * (X_bar[:, -1].sum())
-        c = X_bar[0][3]
+        X_bar_resampled = []
+        num_particles = X_bar.shape[0]
+        W = log_sum_exp(X_bar[:, -1])
+        r = np.random.rand(1)[0] * (1. / num_particles)
         i = 0
-        for m in range(num_particles):
-            U = r+m*(1/num_particles)
-            while i < X_bar.shape[0]-1 and (U>c):
+        c = W[0]
+        for m in range(0, num_particles):
+            U = r + m * 1. / num_particles
+            while U > c:
                 i += 1
-                c += X_bar[i][3]
-            X_bar_resampled[m] = X_bar[i]
-        print(f'X_bar: \n{X_bar}')
-        print(f'X_bar_resample: \n{X_bar_resampled}')
-        # import ipdb; ipdb.set_trace()
+                c += W[i]
+            X_bar_resampled.append(X_bar[i])
+        X_bar_resampled = np.stack(X_bar_resampled)
         return X_bar_resampled
+
+
+def log_sum_exp(log_prob):
+    max_value = np.max(log_prob)
+    prob = np.exp(log_prob - max_value)
+    prob /= np.sum(prob)
+    return prob
