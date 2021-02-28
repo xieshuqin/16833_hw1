@@ -101,7 +101,9 @@ def init_particles_freespace(num_particles, occupancy_map):
     MIN_PROBABILITY = 0.35
     # y, x = np.where((occupancy_map < MIN_PROBABILITY) & (occupancy_map != -1))
     y, x = np.where(occupancy_map == 0)
-    indices = np.random.choice(np.arange(len(y)), num_particles)
+    valid_indices = np.where((350 <= y) & (y <= 450) & (350 <= x) & (x <= 450))[0]
+    indices = np.random.choice(valid_indices, num_particles)
+    # indices = np.random.choice(len(y), num_particles, replace=True)
     y0_vals = y[indices].astype(np.float) * 10.
     x0_vals = x[indices].astype(np.float) * 10.
     theta0_vals = np.random.uniform(-np.pi, np.pi, num_particles)
@@ -148,7 +150,6 @@ if __name__ == '__main__':
     resampler = Resampling()
 
     num_particles = args.num_particles
-    # X_bar = init_particles_random(num_particles, occupancy_map)
     X_bar = init_particles_freespace(num_particles, occupancy_map)
 
     num_beams = 10 if args.debug else 180
@@ -157,10 +158,7 @@ if __name__ == '__main__':
     """
     if args.visualize:
         visualize_map(occupancy_map)
-        visualize_timestep(X_bar, 1, args.output)
-        # plt.figure(2); plt.imshow(occupancy_map); plt.pause(0.01)
-        # X_temp = np.array([[20, 20, 0.5]])
-        # visualize_timestep(X_temp, 1, args.output)
+        visualize_timestep(X_bar, 0, args.output)
 
     first_time_idx = True
     for time_idx, line in enumerate(logfile):
@@ -186,8 +184,8 @@ if __name__ == '__main__':
             # 180 range measurement values from single laser scan
             ranges = meas_vals[6:-1]
 
-        # print("Processing time step {} at time {}s".format(
-        #     time_idx, time_stamp))
+        print("Processing time step {} at time {}s".format(
+            time_idx, time_stamp))
 
         if first_time_idx:
             u_t0 = odometry_robot
@@ -201,12 +199,12 @@ if __name__ == '__main__':
         u_t1 = odometry_robot
 
         # Update motion
-        X_t1 = motion_model.update_vectorized(u_t0, u_t1, X_bar[:, 0:3])
+        X_t1 = motion_model.update(u_t0, u_t1, X_bar[:, 0:3])
 
         # Correction step
-        z_t = ranges
         if meas_type == "L":
-            W_t = sensor_model.beam_range_finder_model_vectorized(z_t, X_t1, num_beams)
+            z_t = ranges
+            W_t = sensor_model.beam_range_finder_model(z_t, X_t1, num_beams)
             X_bar_new = np.hstack((X_t1, W_t[..., None]))
         else:
             X_bar_new = np.hstack((X_t1, X_bar[:, [-1]]))
@@ -214,9 +212,7 @@ if __name__ == '__main__':
         X_bar = X_bar_new
         u_t0 = u_t1
 
-        """
-        RESAMPLING
-        """
+        # Resampling step
         if meas_type == "L":
             # Only resample when laser measurement
             X_bar_new = resampler.low_variance_sampler(X_bar)
@@ -224,5 +220,3 @@ if __name__ == '__main__':
 
         if args.visualize:
             visualize_timestep(X_bar, time_idx, args.output)
-            # visualize_rays(X_bar, sensor_model)
-            # my_visualize(X_bar, occupancy_map)

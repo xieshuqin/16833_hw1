@@ -26,7 +26,7 @@ class Resampling:
         TODO : Add your code here
         """
         num_particles = X_bar.shape[0]
-        prob = X_bar[:, -1] / np.sum(X_bar[:, -1])
+        prob = log_prob_to_prob(X_bar[:, -1])
         indices = np.random.choice(num_particles, num_particles, replace=True, p=prob)
         X_bar_resampled = X_bar[indices]
         return X_bar_resampled
@@ -41,7 +41,7 @@ class Resampling:
         """
         X_bar_resampled = []
         num_particles = X_bar.shape[0]
-        W = log_sum_exp(X_bar[:, -1])
+        W = log_prob_to_prob(X_bar[:, -1])
         r = np.random.rand(1)[0] * (1. / num_particles)
         i = 0
         c = W[0]
@@ -55,7 +55,7 @@ class Resampling:
         return X_bar_resampled
 
 
-def log_sum_exp(log_prob):
+def log_prob_to_prob(log_prob):
     max_value = np.max(log_prob)
     prob = np.exp(log_prob - max_value)
     prob /= np.sum(prob)
