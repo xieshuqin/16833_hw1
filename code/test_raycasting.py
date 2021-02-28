@@ -25,7 +25,7 @@ def test_raycasting_vectorize():
 
     num_beams = 180
     sensor = SensorModel(occupancy_map)
-    z_t_star = sensor.ray_casting_vectorized(X, num_beams=num_beams)
+    z_t_star = sensor.ray_casting(X, num_beams=num_beams)
 
     x0, y0 = X[0, :2]
     angle = np.arange(num_beams) * (np.pi / num_beams)
