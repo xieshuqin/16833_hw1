@@ -23,25 +23,7 @@ class SensorModel:
         TODO : Tune Sensor Model parameters here
         The original numbers are for reference but HAVE TO be tuned.
         """
-
-        # # First set of parameters that works
-        # self._z_hit = 1000 / 1000 # 99 / 2 / 2.5 / 4  # 1.
-        # self._z_short = 0.01 / 1000 # 2 * 198 / 4 / 2.5 / 4  # 1
-        # self._z_max = 0.03 / 1000  # 49 / 4 / 4  # 0.5
-        # self._z_rand = 12500 / 1000 # 990 / 4  # 5
-        # self._sigma_hit = 250  # 400  # 15 # 50
-        # self._lambda_short = 0.01  # 0.01  # 0.05
-
-        # Second set of parameters that works, converge faster
-        # self._z_hit = 1000 / 1000  # 99 / 2 / 2.5 / 4  # 1.
-        # self._z_short = 0.01 / 100  # 2 * 198 / 4 / 2.5 / 4  # 1
-        # self._z_max = 0.03 / 1000  # 49 / 4 / 4  # 0.5
-        # self._z_rand = 12500 / 1000  # 990 / 4  # 5
-        # self._sigma_hit = 100  # 400  # 15 # 50
-        # self._lambda_short = 0.05  # 0.01  # 0.05
-
-        # Third set of parameters that works
-        self._z_hit = 1  # 99 / 2 / 2.5 / 4  # 1.
+        self._z_hit = 1
         self._z_short = 0.0001
         self._z_max = 0.0003
         self._z_rand = 12.5
@@ -113,7 +95,7 @@ class SensorModel:
         X = X_cm.copy()
         X[:, :2] /= 10
 
-        # generate num_beams for each particle, compute their x, y, theta
+        # generate rays for each particle, compute their x, y, theta
         X = np.repeat(X[:, None, :], num_beams, axis=1)  # M x num_beams x 3
         stride = 180 // num_beams
         scan_angles = np.arange(0, 180, stride) * (np.pi / 180)
