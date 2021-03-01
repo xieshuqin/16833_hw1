@@ -64,8 +64,6 @@ class SensorModel:
         """
         p_hit = np.exp(-(z - z_star)**2 / (2*self._sigma_hit**2))
         p_hit /= np.sqrt(2 * np.pi * self._sigma_hit**2)
-        # norm_term = norm.cdf(self._max_range, z_star, self._sigma_hit) - norm.cdf(0, z_star, self._sigma_hit)
-        # p_hit /= (norm_term + 1e-9)
 
         p_short = self._lambda_short * np.exp(-self._lambda_short * z)
         p_short /= (1 - np.exp(-self._lambda_short * z_star) + 1e-9)
@@ -123,31 +121,30 @@ class SensorModel:
         X[..., 2] %= (2 * np.pi)
         X = X.reshape(-1, 3)  # M*num_beams x 3, [x, y, theta]
 
-        # dist is the range, is found indicates found or not
-        dist = np.zeros((X.shape[0],))
-        is_found = np.zeros((X.shape[0],), dtype=np.bool)
-        X_unfound = X
-        dist_unfound = dist
-        indices = np.arange(len(X_unfound))
-        while len(indices) > 0:
-            # indices maintains index to the original array that wasn't hit yet.
-            # X_unfound maintains the set of particles that wasn't hit yet
-            X_unfound, dist_unfound = self.update_one_step(X_unfound, dist_unfound)
-            found_mask = self.check_found(X_unfound, dist_unfound)
-            if np.any(found_mask):
-                dist[indices[found_mask]] = dist_unfound[found_mask]
-                is_found[indices[found_mask]] = True
-                indices = indices[~found_mask]
-                X_unfound = X_unfound[~found_mask]
-                dist_unfound = dist_unfound[~found_mask]
+        # main loop
+        dist = np.zeros((X.shape[0],))  # distance to emitters
+        X_unhit = X
+        dist_unhit = dist
+        unhit_inds = np.arange(len(X_unhit))
+        while len(unhit_inds) > 0:
+            # traverse for one step and check hit
+            X_unhit, dist_unhit = self.traverse_one_step(X_unhit, dist_unhit)
+            hit_mask = self.check_hit(X_unhit, dist_unhit)
+            # update variables if any ray is hit
+            if np.any(hit_mask):
+                dist[unhit_inds[hit_mask]] = dist_unhit[hit_mask]
+                unhit_mask = ~hit_mask
+                unhit_inds = unhit_inds[unhit_mask]
+                X_unhit = X_unhit[unhit_mask]
+                dist_unhit = dist_unhit[unhit_mask]
 
         Z_star = dist.reshape(-1, num_beams)
         Z_star *= 10.  # convert to centimeter
         return Z_star
 
-    def update_one_step(self, X, dist):
+    def traverse_one_step(self, X, dist):
         """
-        Ray casting for one step.
+        Traverse along a ray for one step.
         """
         x, y, theta = X[:, 0], X[:, 1], X[:, 2]
         slope = np.tan(theta)
@@ -183,9 +180,9 @@ class SensorModel:
 
         return X, dist
 
-    def check_found(self, X, dist):
+    def check_hit(self, X, dist):
         """
-        Check if each element in X hits obstacle or exceed max range
+        Check if a ray hits obstacle or exceeds max range
         param X: M x 3
         param: dist: M
         """
