@@ -11,11 +11,13 @@ import sys, os
 from map_reader import MapReader
 from motion_model import MotionModel
 from sensor_model import SensorModel
-from resampling import Resampling
+from resampling import Resampling, log_prob_to_prob
 
 from matplotlib import pyplot as plt
 from matplotlib import figure as fig
 import time
+
+from sklearn.cluster import DBSCAN
 
 # For debug purpose, set a fix random seed
 np.random.seed(10000)
@@ -36,7 +38,7 @@ def visualize_timestep(X_bar, tstep, output_path):
     x_locs = X_bar[:, 0] / 10.0
     y_locs = X_bar[:, 1] / 10.0
     scat = plt.scatter(x_locs, y_locs, c='r', marker='o')
-    plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
+    # plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
     plt.pause(0.01)
     scat.remove()
 
@@ -94,8 +96,6 @@ def init_particles_freespace(num_particles, occupancy_map):
     MIN_PROBABILITY = 0.35
     # y, x = np.where((occupancy_map < MIN_PROBABILITY) & (occupancy_map != -1))
     y, x = np.where(occupancy_map == 0)
-    # valid_indices = np.where((350 <= y) & (y <= 450) & (350 <= x) & (x <= 450))[0]
-    # indices = np.random.choice(valid_indices, num_particles)
     indices = np.random.choice(len(y), num_particles, replace=False)
     y0_vals = y[indices].astype(np.float) * 10.
     x0_vals = x[indices].astype(np.float) * 10.
@@ -106,6 +106,21 @@ def init_particles_freespace(num_particles, occupancy_map):
 
     X_bar_init = np.stack([x0_vals, y0_vals, theta0_vals, w0_vals], axis=1)
     return X_bar_init
+
+
+def adaptively_choose_particle(X):
+    cluster = DBSCAN(eps=10, min_samples=2).fit(X[:, :2])
+    labels = cluster.labels_
+    X_out = []
+    for unique_label in np.unique(labels):
+        if unique_label == -1:
+            continue
+        mask = labels == unique_label
+        X_cluster = X[mask]
+        prob = log_prob_to_prob(X_cluster[:, -1])
+        indices = np.random.choice(len(X_cluster), min(len(X_cluster), 100), replace=False, p=prob)
+        X_out.append(X_cluster[indices])
+    return np.concatenate(X_out, axis=0)
 
 
 if __name__ == '__main__':
@@ -128,6 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_particles', default=10000, type=int)
     parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--debug', action='store_true', help='Debug mode, only send out 10 beams')
+    parser.add_argument('--adaptive', action='store_true', help='Adaptively select particles or not')
     args = parser.parse_args()
 
     src_path_map = args.path_to_map
@@ -136,7 +152,8 @@ if __name__ == '__main__':
 
     map_obj = MapReader(src_path_map)
     occupancy_map = map_obj.get_map()
-    logfile = open(src_path_log, 'r')
+    with open(src_path_log, 'r') as f:
+        logfile = f.readlines()
 
     motion_model = MotionModel()
     sensor_model = SensorModel(occupancy_map)
@@ -154,8 +171,9 @@ if __name__ == '__main__':
         visualize_timestep(X_bar, 0, args.output)
 
     first_time_idx = True
+    total_time, cnt = 0., 0.
     for time_idx, line in enumerate(logfile):
-
+        tic = time.time()
         # Read a single 'line' from the log file (can be either odometry or laser measurement)
         # L : laser scan measurement, O : odometry measurement
         meas_type = line[0]
@@ -166,10 +184,6 @@ if __name__ == '__main__':
         # odometry reading [x, y, theta] in odometry frame
         odometry_robot = meas_vals[0:3]
         time_stamp = meas_vals[-1]
-
-        # ignore pure odometry measurements for (faster debugging)
-        # if ((time_stamp <= 0.0) | (meas_type == "O")):
-        #     continue
 
         if (meas_type == "L"):
             # [x, y, theta] coordinates of laser in odometry frame
@@ -200,7 +214,20 @@ if __name__ == '__main__':
 
             # Resampling step
             X_bar_new = resampler.low_variance_sampler(X_bar_new)
+
+            # DBSCAN to sample subsets of particles
+            if args.adaptive:
+                X_bar_new = adaptively_choose_particle(X_bar_new)
             X_bar = X_bar_new
+
+        if meas_type == "L":
+            toc = time.time()
+            total_time += (toc - tic)
+            cnt += 1
+            # print(f'Running time: {(1./(toc - tic)):.2f} fps, {toc-tic}s')
 
         if args.visualize:
             visualize_timestep(X_bar, time_idx, args.output)
+
+    avg_time = total_time / cnt
+    print(f'Average FPS: {(1./avg_time):.2f} fps')
