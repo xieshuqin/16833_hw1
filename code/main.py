@@ -68,13 +68,6 @@ def visualize_rays(X_bar, sensor_model):
     # plt.show()
 
 
-def my_visualize(X_bar, occupancy_map):
-    plt.clf()
-    plt.imshow(occupancy_map)
-    plt.scatter(X_bar[:, 0], X_bar[:, 1], c='r', marker='o')
-    plt.pause(0.01)
-
-
 def init_particles_random(num_particles, occupancy_map):
 
     # initialize [x, y, theta] positions in world_frame for all particles
@@ -101,9 +94,9 @@ def init_particles_freespace(num_particles, occupancy_map):
     MIN_PROBABILITY = 0.35
     # y, x = np.where((occupancy_map < MIN_PROBABILITY) & (occupancy_map != -1))
     y, x = np.where(occupancy_map == 0)
-    valid_indices = np.where((350 <= y) & (y <= 450) & (350 <= x) & (x <= 450))[0]
-    indices = np.random.choice(valid_indices, num_particles)
-    # indices = np.random.choice(len(y), num_particles, replace=True)
+    # valid_indices = np.where((350 <= y) & (y <= 450) & (350 <= x) & (x <= 450))[0]
+    # indices = np.random.choice(valid_indices, num_particles)
+    indices = np.random.choice(len(y), num_particles, replace=False)
     y0_vals = y[indices].astype(np.float) * 10.
     x0_vals = x[indices].astype(np.float) * 10.
     theta0_vals = np.random.uniform(-np.pi, np.pi, num_particles)
@@ -132,7 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--path_to_map', default='../data/map/wean.dat')
     parser.add_argument('--path_to_log', default='../data/log/robotdata1.log')
     parser.add_argument('--output', default='results')
-    parser.add_argument('--num_particles', default=500, type=int)
+    parser.add_argument('--num_particles', default=10000, type=int)
     parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--debug', action='store_true', help='Debug mode, only send out 10 beams')
     args = parser.parse_args()
@@ -152,7 +145,7 @@ if __name__ == '__main__':
     num_particles = args.num_particles
     X_bar = init_particles_freespace(num_particles, occupancy_map)
 
-    num_beams = 10 if args.debug else 180
+    num_beams = 10 if args.debug else 18
     """
     Monte Carlo Localization Algorithm : Main Loop
     """
@@ -192,30 +185,21 @@ if __name__ == '__main__':
             first_time_idx = False
             continue
 
-        if meas_type == "O":
-            continue
-
-        X_bar_new = np.zeros((num_particles, 4), dtype=np.float64)
-        u_t1 = odometry_robot
-
-        # Update motion
-        X_t1 = motion_model.update(u_t0, u_t1, X_bar[:, 0:3])
-
-        # Correction step
         if meas_type == "L":
+            u_t1 = odometry_robot
+
+            # Update motion
+            X_t1 = motion_model.update(u_t0, u_t1, X_bar[:, 0:3])
+
+            # Correction step
             z_t = ranges
             W_t = sensor_model.beam_range_finder_model(z_t, X_t1, num_beams)
             X_bar_new = np.hstack((X_t1, W_t[..., None]))
-        else:
-            X_bar_new = np.hstack((X_t1, X_bar[:, [-1]]))
 
-        X_bar = X_bar_new
-        u_t0 = u_t1
+            u_t0 = u_t1
 
-        # Resampling step
-        if meas_type == "L":
-            # Only resample when laser measurement
-            X_bar_new = resampler.low_variance_sampler(X_bar)
+            # Resampling step
+            X_bar_new = resampler.low_variance_sampler(X_bar_new)
             X_bar = X_bar_new
 
         if args.visualize:

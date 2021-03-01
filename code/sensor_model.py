@@ -24,23 +24,31 @@ class SensorModel:
         The original numbers are for reference but HAVE TO be tuned.
         """
 
-        # Old set of parameters
-        self._z_hit = 10000 # 99 / 2 / 2.5 / 4  # 1.
-        self._z_short = 0.01 # 2 * 198 / 4 / 2.5 / 4  # 1
-        self._z_max = 0.01 # 49 / 4 / 4  # 0.5
-        self._z_rand = 1000 # 990 / 4  # 5
-        self._sigma_hit = np.sqrt(250)  # 400  # 15 # 50
-        self._lambda_short = 0.01  # 0.01  # 0.05
+        # # First set of parameters that works
+        # self._z_hit = 1000 / 1000 # 99 / 2 / 2.5 / 4  # 1.
+        # self._z_short = 0.01 / 1000 # 2 * 198 / 4 / 2.5 / 4  # 1
+        # self._z_max = 0.03 / 1000  # 49 / 4 / 4  # 0.5
+        # self._z_rand = 12500 / 1000 # 990 / 4  # 5
+        # self._sigma_hit = 250  # 400  # 15 # 50
+        # self._lambda_short = 0.01  # 0.01  # 0.05
 
-        # self._z_hit = 5  # 99 / 2 / 2.5 / 4  # 1.
-        # self._z_short = 0.01  # 2 * 198 / 4 / 2.5 / 4  # 1
-        # self._z_max = 0.1  # 49 / 4 / 4  # 0.5
-        # self._z_rand = 10  # 990 / 4  # 5
+        # Second set of parameters that works, converge faster
+        # self._z_hit = 1000 / 1000  # 99 / 2 / 2.5 / 4  # 1.
+        # self._z_short = 0.01 / 100  # 2 * 198 / 4 / 2.5 / 4  # 1
+        # self._z_max = 0.03 / 1000  # 49 / 4 / 4  # 0.5
+        # self._z_rand = 12500 / 1000  # 990 / 4  # 5
+        # self._sigma_hit = 100  # 400  # 15 # 50
+        # self._lambda_short = 0.05  # 0.01  # 0.05
 
-        # self._sigma_hit = 100 # 400  # 15 # 50
-        # self._lambda_short = 0.05 # 0.01  # 0.05
-        #
-        self._max_range = 1000  # 100 # 1000
+        # Third set of parameters that works
+        self._z_hit = 1  # 99 / 2 / 2.5 / 4  # 1.
+        self._z_short = 0.0001
+        self._z_max = 0.0003
+        self._z_rand = 12.5
+        self._sigma_hit = 100
+        self._lambda_short = 0.05
+
+        self._max_range = 1000
         self._min_probability = 0.35
         self._subsampling = 2
         self._delta = 50
@@ -56,8 +64,8 @@ class SensorModel:
         """
         p_hit = np.exp(-(z - z_star)**2 / (2*self._sigma_hit**2))
         p_hit /= np.sqrt(2 * np.pi * self._sigma_hit**2)
-        norm_term = norm.cdf(self._max_range, z_star, self._sigma_hit) - norm.cdf(0, z_star, self._sigma_hit)
-        p_hit /= (norm_term + 1e-9)
+        # norm_term = norm.cdf(self._max_range, z_star, self._sigma_hit) - norm.cdf(0, z_star, self._sigma_hit)
+        # p_hit /= (norm_term + 1e-9)
 
         p_short = self._lambda_short * np.exp(-self._lambda_short * z)
         p_short /= (1 - np.exp(-self._lambda_short * z_star) + 1e-9)
@@ -109,7 +117,8 @@ class SensorModel:
 
         # generate num_beams for each particle, compute their x, y, theta
         X = np.repeat(X[:, None, :], num_beams, axis=1)  # M x num_beams x 3
-        scan_angles = np.arange(0, num_beams) * (np.pi / num_beams)
+        stride = 180 // num_beams
+        scan_angles = np.arange(0, 180, stride) * (np.pi / 180)
         X[..., 2] += scan_angles - np.pi/2
         X[..., 2] %= (2 * np.pi)
         X = X.reshape(-1, 3)  # M*num_beams x 3, [x, y, theta]

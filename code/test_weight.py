@@ -21,21 +21,21 @@ def test_hyperparameter():
 
     sensor = SensorModel(occupancy_map)
     X = X.reshape(1, -1)
-    z_t_star = sensor.ray_casting(X[:, :3], num_beams=2)
-    print(z_t_star[0])
+    z_t_star = sensor.ray_casting(X[:, :3], num_beams=10)
+    print(z_t_star)
+    print(z_t_star.max())
 
     z = np.arange(sensor._max_range+2).astype(np.float)
-    p_hit, p_short, p_max, p_rand = sensor.estimate_density(z, z_t_star[0][0])
+    p_hit, p_short, p_max, p_rand = sensor.estimate_density(z, z_t_star[0][5])
     # plot(1, p_hit)
     # plot(2, p_short)
     # plot(3, p_max)
     # plot(4, p_rand)
-    print(p_max.max())
 
-    w_hit = 3 # 99 / 2 / 2.5 / 4  # 1.
-    w_short = 0.05 # 2 * 198 / 4 / 2.5 / 4  # 1
-    w_max = 0.1 # 49 / 2.5 / 4  # 0.5
-    w_rand = 10 # 990 / 4  # 5
+    # w_hit = 3 # 99 / 2 / 2.5 / 4  # 1.
+    # w_short = 0.05 # 2 * 198 / 4 / 2.5 / 4  # 1
+    # w_max = 0.1 # 49 / 2.5 / 4  # 0.5
+    # w_rand = 10 # 990 / 4  # 5
 
     # self._z_hit = 99 / 2 / 2.5 / 4  # 1.
     # self._z_short = 198 / 4 // 2.5 / 4  # 1
@@ -46,7 +46,13 @@ def test_hyperparameter():
     # w_short = 0.1
     # w_max = 0.5
     # w_rand = 10
-    p = w_hit * p_hit + w_short * p_short + w_max * p_max + w_rand * p_rand
+
+    w_hit = 1000  # 99 / 2 / 2.5 / 4  # 1.
+    w_short = 0.01  # 2 * 198 / 4 / 2.5 / 4  # 1
+    w_max = 0.03  # 49 / 4 / 4  # 0.5
+    w_rand = 12500
+
+    p = sensor._z_hit * p_hit + sensor._z_short * p_short + sensor._z_max * p_max + sensor._z_rand * p_rand
     plot(5, p)
     plt.show()
 
@@ -54,7 +60,7 @@ def test_hyperparameter():
 def plot(figid, distribution):
     fig = plt.figure(figid)
     plt.bar(np.arange(len(distribution)), distribution)
-    plt.ylim(0, 0.2)
+    # plt.ylim(0, 0.2)
     # plt.ylim(0, 10)
 
 if __name__ == '__main__':
