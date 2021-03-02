@@ -19,14 +19,12 @@ import time
 
 from sklearn.cluster import DBSCAN
 
-# For debug purpose, set a fix random seed
+# For reproducible purpose, set a fix random seed
 np.random.seed(10000)
 
 
 def visualize_map(occupancy_map):
     fig = plt.figure(1)
-    # ax = plt.subplot(121)
-    # mng = plt.get_current_fig_manager()
     plt.ion()
     plt.imshow(occupancy_map, cmap='Greys')
     plt.axis([0, 800, 0, 800])
@@ -34,40 +32,12 @@ def visualize_map(occupancy_map):
 
 def visualize_timestep(X_bar, tstep, output_path):
     fig = plt.figure(1)
-    # ax = plt.subplot(121)
     x_locs = X_bar[:, 0] / 10.0
     y_locs = X_bar[:, 1] / 10.0
     scat = plt.scatter(x_locs, y_locs, c='r', marker='o')
-    # plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
+    plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
     plt.pause(0.01)
     scat.remove()
-
-
-def visualize_rays(X_bar, sensor_model):
-    x_peak = X_bar[np.argmax(X_bar[:, 3])]
-    x, y, theta, weight = x_peak
-    x0, y0 = x, y
-    angle = np.arange(180) * np.pi / 180
-    angle = theta + angle - np.pi/2
-
-    z_t_star = sensor_model.ray_casting(np.array([x, y, theta]), sensor_model.occupancy_map, 180)
-    x1 = x0 + z_t_star * np.cos(angle)
-    y1 = y0 - z_t_star * np.sin(angle)
-
-    x0 /= 10
-    y0 /= 10
-    x1 /= 10
-    y1 /= 10
-
-    # fig = plt.figure(2)
-    fig = plt.figure(1)
-    ax = plt.subplot(122)
-    plt.cla()
-    plt.imshow(sensor_model.occupancy_map)
-    plt.scatter(x1, y1, c='y', marker='o')
-    plt.scatter(x0, y0, c='r', marker='x')
-    plt.pause(0.01)
-    # plt.show()
 
 
 def init_particles_random(num_particles, occupancy_map):
@@ -118,7 +88,7 @@ def adaptively_choose_particle(X):
         mask = labels == unique_label
         X_cluster = X[mask]
         prob = log_prob_to_prob(X_cluster[:, -1])
-        indices = np.random.choice(len(X_cluster), min(len(X_cluster), 100), replace=False, p=prob)
+        indices = np.random.choice(len(X_cluster), min(len(X_cluster), 200), replace=False, p=prob)
         X_out.append(X_cluster[indices])
     return np.concatenate(X_out, axis=0)
 
@@ -171,7 +141,7 @@ if __name__ == '__main__':
         visualize_timestep(X_bar, 0, args.output)
 
     first_time_idx = True
-    total_time, cnt = 0., 0.
+    total_time, cnt, time_id = 0., 0., 0
     for time_idx, line in enumerate(logfile):
         tic = time.time()
         # Read a single 'line' from the log file (can be either odometry or laser measurement)
@@ -226,8 +196,9 @@ if __name__ == '__main__':
             cnt += 1
             # print(f'Running time: {(1./(toc - tic)):.2f} fps, {toc-tic}s')
 
-        if args.visualize:
-            visualize_timestep(X_bar, time_idx, args.output)
+        if meas_type == "L" and args.visualize:
+            time_id += 1
+            visualize_timestep(X_bar, time_id, args.output)
 
     avg_time = total_time / cnt
     print(f'Average FPS: {(1./avg_time):.2f} fps')
